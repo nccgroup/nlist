@@ -55,3 +55,4 @@ The first string in this array should be a format string containing `%s` where s
 - `service`: The service running on the port
 
 You must specify the same number of values as there are occurrences of `%s` in your format string!
+Literal `%` characters will need to be backslash escaped (`\%`)! 

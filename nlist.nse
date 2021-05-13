@@ -39,25 +39,41 @@ license = "GNU General Public License v3.0 -- See https://www.gnu.org/licenses"
 categories = {"default", "safe"}
 
 
-getDefaultConfPath = function(pathSeparator)
-    local confPath = nil
-    local scriptPath = debug.getinfo(1,"S").source:sub(2)
-    local scriptPathSplit = {}
-    for i in scriptPath:gmatch("[^" .. pathSeparator .. "]+") do 
-        table.insert(scriptPathSplit, i)
-    end
-    table.remove(scriptPathSplit)
-    if #scriptPathSplit == 0 then
-        table.insert(scriptPathSplit, ".")
-    end
-    for _, v in pairs(scriptPathSplit) do
-        if confPath == nil then
-            confPath = v
+exists = function(path)
+    local ok, err, code = os.rename(path, path)
+    if not ok then
+        if code == 13 then
+            -- Permission denied, but it exists
+            return true
         else
-            confPath = confPath .. pathSeparator .. v
+            return false
         end
+    else
+        return true
     end
-    return confPath .. pathSeparator .. "nlist.conf"
+ end
+
+getDefaultConfPath = function(pathSeparator)
+    if pathSeparator == "/" then
+        if exists("/usr/share/nmap") then
+            return "/usr/share/nmap/scripts/nlist.conf"
+        elseif exists("/usr/local/share/nmap") then 
+            return "/usr/local/share/nmap/scripts/nlist.conf"
+        else
+            stdnse.debug(1, "Scripts directory location unknown")
+        end
+    elseif pathSeparator == "\\" then
+        if exists("C:\\Program Files (x86)\\Nmap") then
+            return "C:\\Program Files (x86)\\Nmap\\scripts\\nlist.conf"
+        elseif exists("C:\\Program Files\\Nmap") then
+            return "C:\\Program Files\\Nmap\\scripts\\nlist.conf"
+        else
+            stdnse.debug(1, "Scripts directory location unknown")
+        end
+    else
+        stdnse.debug(1, "Unknown OS")
+    end
+    return nil
 end
 
 getHomeConfPath = function(pathSeparator)
@@ -72,7 +88,7 @@ getHomeConfPath = function(pathSeparator)
     end
 end
 
-parseConfFile = function(confFile)
+parseConfFile = function(confFile, confPath)
     if not confFile then
         stdnse.debug(1, "Could not open config file: '%s'", confPath)
         return false, string.format("Config file '%s' could not be opened", confPath)
@@ -118,10 +134,13 @@ action = function(host, port)
     if not confFile then
         stdnse.debug(1, "No '.nlist' file found in home directory")
         confPath = getDefaultConfPath(pathSeparator)
+        if not confPath then
+            return "Could not open config file"
+        end
         confFile = io.open(confPath, "r")
     end
     stdnse.debug(1, "Using config file: '%s'", confPath)
-    local status, config = parseConfFile(confFile)
+    local status, config = parseConfFile(confFile, confPath)
     if not status then
         return config
     end
@@ -153,6 +172,9 @@ action = function(host, port)
     if config["use_default_rules"] then
         stdnse.debug(1, "Loading default rules", confPath)
         local defConfPath = getDefaultConfPath(pathSeparator)
+        if not defConfPath then
+            return "Could not open default config file"
+        end
         local confFile = io.open(defConfPath, "r")
         local status, conf = parseConfFile(confFile)
         defConfig = conf
